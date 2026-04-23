@@ -3,12 +3,17 @@ services:
     image: mysql:8.0
     container_name: gpt2api-mysql
     restart: unless-stopped
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     environment:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root}
       MYSQL_DATABASE: ${MYSQL_DATABASE:-gpt2api}
       MYSQL_USER: ${MYSQL_USER:-gpt2api}
       MYSQL_PASSWORD: ${MYSQL_PASSWORD:-gpt2api}
       TZ: Asia/Shanghai
+      HTTP_PROXY: http://host.docker.internal:7897
+      HTTPS_PROXY: http://host.docker.internal:7897
+      NO_PROXY: 127.0.0.1,localhost
     command:
       - --character-set-server=utf8mb4
       - --collation-server=utf8mb4_unicode_ci
@@ -19,7 +24,7 @@ services:
       # mariadb-client 附带的 mariadb-dump(无 caching_sha2_password 插件)。
       - --default-authentication-plugin=mysql_native_password
     ports:
-      - "${MYSQL_PORT:-3306}:3306"
+      - "${MYSQL_PORT:-3307}:3306"
     volumes:
       - mysql_data:/var/lib/mysql
     healthcheck:
@@ -47,6 +52,10 @@ services:
     build:
       context: ..
       dockerfile: deploy/Dockerfile
+      args:
+        GOPROXY: ${GO_PROXY:-https://goproxy.cn,direct}
+        GOSUMDB: ${GO_SUMDB:-sum.golang.org}
+        NPM_REGISTRY: ${NPM_REGISTRY:-https://registry.npmmirror.com}
     image: gpt2api/server:latest
     container_name: gpt2api-server
     restart: unless-stopped
@@ -80,6 +89,8 @@ services:
     dns:
       - ${DNS_PRIMARY:-8.8.8.8}
       - ${DNS_FALLBACK:-1.1.1.1}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       - ../configs:/app/configs:ro
       - backups:/app/data/backups

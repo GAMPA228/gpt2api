@@ -69,6 +69,9 @@ const imageTasks = ref<ImageTask[]>([])
 const imagePage = ref({ limit: 12, offset: 0 })
 const imageLoading = ref(false)
 const hasMoreImage = ref(false)
+const previewVisible = ref(false)
+const previewList = ref<string[]>([])
+const previewIndex = ref(0)
 
 async function loadImageTasks(reset = true) {
   imageLoading.value = true
@@ -92,6 +95,25 @@ async function loadImageTasks(reset = true) {
 function imageLoadMore() {
   imagePage.value.offset += imagePage.value.limit
   loadImageTasks(false)
+}
+
+function openImagePreview(urls: string[], idx = 0) {
+  if (!urls.length) return
+  previewList.value = urls
+  previewIndex.value = idx
+  previewVisible.value = true
+}
+
+function downloadImage(url: string, taskID: string, idx = 0) {
+  if (!url) return
+  const a = document.createElement('a')
+  a.href = url
+  a.target = '_blank'
+  a.rel = 'noopener'
+  a.download = `${taskID}-${idx + 1}.png`
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
 }
 
 // ---------- SDK 代码示例 ----------
@@ -347,7 +369,11 @@ onMounted(async () => {
                 shadow="hover"
                 class="img-card"
               >
-                <div class="thumb">
+                <div
+                  class="thumb"
+                  :class="{ clickable: !!t.image_urls?.length }"
+                  @click="openImagePreview(t.image_urls || [], 0)"
+                >
                   <img v-if="t.image_urls?.[0]" :src="t.image_urls[0]" :alt="t.prompt" />
                   <div v-else class="thumb-ph">
                     <el-icon :size="32"><PictureRounded /></el-icon>
@@ -360,6 +386,11 @@ onMounted(async () => {
                     <el-tag size="small" :type="statusTag(t.status)">{{ t.status }}</el-tag>
                     <span>{{ t.size }}</span>
                     <span class="mute">n={{ t.n }}</span>
+                  </div>
+                  <div v-if="t.image_urls?.length" class="actions">
+                    <el-button link type="primary" @click="openImagePreview(t.image_urls, 0)">预览</el-button>
+                    <el-button link @click="downloadImage(t.image_urls[0], t.task_id, 0)">下载</el-button>
+                    <span v-if="t.image_urls.length > 1" class="mute">共 {{ t.image_urls.length }} 张</span>
                   </div>
                   <div class="foot">
                     <span class="mute">{{ formatDateTime(t.created_at) }}</span>
@@ -376,6 +407,13 @@ onMounted(async () => {
         </div>
       </el-tab-pane>
     </el-tabs>
+
+    <el-image-viewer
+      v-if="previewVisible"
+      :url-list="previewList"
+      :initial-index="previewIndex"
+      @close="previewVisible = false"
+    />
   </div>
 </template>
 
@@ -436,6 +474,7 @@ onMounted(async () => {
     background: var(--el-fill-color-lighter);
     img { max-width: 100%; max-height: 100%; object-fit: contain; }
   }
+  .thumb.clickable { cursor: zoom-in; }
   .thumb-ph { text-align: center; color: var(--el-text-color-secondary); .s { font-size: 12px; } }
   .meta { padding: 10px 12px; }
   .title {
@@ -443,6 +482,9 @@ onMounted(async () => {
     overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
   }
   .sub { display: flex; gap: 6px; font-size: 12px; align-items: center; color: var(--el-text-color-regular); }
+  .actions {
+    display: flex; align-items: center; gap: 8px; margin-top: 4px; font-size: 12px;
+  }
   .foot {
     display: flex; justify-content: space-between; margin-top: 6px; font-size: 12px;
     .credit { color: #e6a23c; font-weight: 600; }

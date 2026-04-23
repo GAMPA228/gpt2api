@@ -1,0 +1,10 @@
+.git
+.idea
+.codex
+deploy/logs
+deploy/bin
+web/dist
+web/node_modules
+**/node_modules
+**/.DS_Store
+**/Thumbs.db

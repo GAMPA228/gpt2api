@@ -43,7 +43,11 @@ type taskView struct {
 }
 
 func toView(t *Task) taskView {
-	urls := t.DecodeResultURLs()
+	rawURLs := t.DecodeResultURLs()
+	urls := make([]string, 0, len(rawURLs))
+	for i := range rawURLs {
+		urls = append(urls, BuildImageProxyURL(t.TaskID, i, ImageProxyTTL))
+	}
 	fids := t.DecodeFileIDs()
 	for i, id := range fids {
 		fids[i] = strings.TrimPrefix(id, "sed:")

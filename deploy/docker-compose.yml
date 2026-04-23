@@ -3,17 +3,13 @@ services:
     image: mysql:8.0
     container_name: gpt2api-mysql
     restart: unless-stopped
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
     environment:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root}
       MYSQL_DATABASE: ${MYSQL_DATABASE:-gpt2api}
       MYSQL_USER: ${MYSQL_USER:-gpt2api}
       MYSQL_PASSWORD: ${MYSQL_PASSWORD:-gpt2api}
       TZ: Asia/Shanghai
-      HTTP_PROXY: http://host.docker.internal:7897
-      HTTPS_PROXY: http://host.docker.internal:7897
-      NO_PROXY: 127.0.0.1,localhost
+
     command:
       - --character-set-server=utf8mb4
       - --collation-server=utf8mb4_unicode_ci
@@ -81,6 +77,9 @@ services:
       # 强烈建议在 .env 中覆盖下列两项
       GPT2API_JWT_SECRET: ${JWT_SECRET:-dev_secret_change_me_in_production_please_32b}
       GPT2API_CRYPTO_AES_KEY: ${CRYPTO_AES_KEY:-0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef}
+      HTTP_PROXY: http://host.docker.internal:7897
+      HTTPS_PROXY: http://host.docker.internal:7897
+      NO_PROXY: 127.0.0.1,localhost
     ports:
       - "${HTTP_PORT:-8080}:8080"
     # 给容器指定独立公共 DNS,避免宿主 Clash/V2Ray 等梯子劫持了

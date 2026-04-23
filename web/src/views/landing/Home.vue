@@ -18,7 +18,6 @@ const loggedIn = computed(() => user.isLoggedIn)
 
 const brand = brandParts()
 const repoHref = `https://${brand.repo}`
-const qqHref = `https://qm.qq.com/q/${brand.qq}`
 
 function goPlay() {
   if (loggedIn.value) router.push('/personal/play')
@@ -29,7 +28,6 @@ function goLogin() { router.push('/login') }
 function goRegister() { router.push('/register') }
 function scrollTop() { window.scrollTo({ top: 0, behavior: 'smooth' }) }
 
-// 滚动监听,nav 加实体背景
 const scrolled = ref(false)
 onMounted(() => {
   const onScroll = () => { scrolled.value = window.scrollY > 24 }
@@ -37,32 +35,30 @@ onMounted(() => {
   onScroll()
 })
 
-// 三张卖点卡,全部围绕"图"
 const features = [
   {
     icon: 'MagicStick',
     color: '#409eff',
     title: 'IMG2 正式版直出',
-    desc: '全面对齐 <code>picture_v2</code> 正式协议,SSE 够数即返回,60s 短轮询补齐。<b>速度优先 · 不悄悄重试</b>,出错第一时间暴露给调用方。',
+    desc: '全面对齐 <code>picture_v2</code> 正式协议，SSE 够数即返回，60s 短轮询补齐。<b>速度优先，不悄悄重试</b>，出错第一时间暴露给调用方。',
   },
   {
     icon: 'Picture',
     color: '#a855f7',
-    title: '批量 · 多比例 · 预设',
-    desc: '10 种常用宽高比一键切换(21:9 / 16:9 / 4:3 / 1:1 / 9:16 …),<b>N 张批量成图</b>,提示词预设库,浏览器里直接出图。',
+    title: '批量、多比例、预设',
+    desc: '10 种常用宽高比一键切换，支持 <b>N 张批量出图</b>、提示词预设库，浏览器里直接生成。',
   },
   {
     icon: 'Connection',
     color: '#67c23a',
     title: 'OpenAI 零改造接入',
-    desc: '<code>/v1/images/generations</code> · <code>/v1/images/edits</code> 原样对齐官方 SDK,<b>切网关只改 base_url</b>,一行代码即可接入。',
+    desc: '<code>/v1/images/generations</code> 与 <code>/v1/images/edits</code> 对齐官方 SDK，<b>切网关只改 base_url</b>，一行代码即可接入。',
   },
 ]
 </script>
 
 <template>
   <div class="landing" :class="{ dark: ui.isDark }">
-    <!-- ============= 顶部导航 ============= -->
     <header class="nav" :class="{ scrolled }">
       <div class="nav-inner">
         <a class="logo" @click="scrollTop">
@@ -74,7 +70,6 @@ const features = [
           <a :href="repoHref" target="_blank" rel="noopener">
             GitHub <el-icon :size="13" class="ext"><TopRight /></el-icon>
           </a>
-          <a :href="qqHref" target="_blank" rel="noopener">QQ 群 {{ brand.qq }}</a>
         </nav>
         <div class="nav-actions">
           <el-button
@@ -89,14 +84,13 @@ const features = [
           </template>
           <template v-else>
             <el-button type="primary" round @click="goDashboard">
-              进入控制台 <el-icon><ArrowRight /></el-icon>
+              进入控制台<el-icon><ArrowRight /></el-icon>
             </el-button>
           </template>
         </div>
       </div>
     </header>
 
-    <!-- ============= Hero:只讲 GPT IMAGE2 出图 ============= -->
     <section id="hero" class="hero">
       <div class="hero-bg"></div>
       <div class="hero-inner">
@@ -110,7 +104,7 @@ const features = [
             一键出高清终稿
           </h1>
           <p class="hero-sub">
-            基于 chatgpt.com 逆向的 <b>gpt-image-2</b> 网关<br/>
+            基于 chatgpt.com 的 <b>gpt-image-2</b> 网关<br/>
             <b>IMG2 终稿直出</b> · 多比例 / 批量 N 张 / OpenAI SDK 零改造
           </p>
           <div class="hero-cta">
@@ -122,12 +116,8 @@ const features = [
             </el-button>
           </div>
           <div class="hero-meta">
-            <a class="meta-link" :href="qqHref" target="_blank" rel="noopener">
-              <el-icon><Service /></el-icon> {{ brand.qqLabel }}{{ brand.qq }}
-            </a>
-            <span class="dot-sep">·</span>
-            <a class="meta-link" :href="brand.picUrl" target="_blank" rel="noopener">
-              <el-icon><PictureFilled /></el-icon> {{ brand.picLabel }}{{ brand.picText }}
+            <a class="meta-link" :href="repoHref" target="_blank" rel="noopener">
+              <el-icon><Link /></el-icon> {{ brand.repoLabel }}{{ brand.repo }}
             </a>
           </div>
         </div>
@@ -147,7 +137,6 @@ const features = [
       </div>
     </section>
 
-    <!-- ============= 三张卖点卡(全围绕"图") ============= -->
     <section class="section features">
       <div class="feature-grid">
         <div v-for="f in features" :key="f.title" class="feature-card">
@@ -160,28 +149,22 @@ const features = [
       </div>
       <div class="features-cta">
         <el-button size="large" type="primary" round @click="goPlay">
-          立即开始出图 <el-icon><ArrowRight /></el-icon>
+          立即开始出图<el-icon><ArrowRight /></el-icon>
         </el-button>
       </div>
     </section>
 
-    <!-- ============= Footer(极简) ============= -->
     <footer class="footer">
       <div class="footer-inner">
         <span>© {{ new Date().getFullYear() }} {{ siteName }} · gpt-image-2 终稿直出网关</span>
         <span class="sep">·</span>
         <a :href="repoHref" target="_blank" rel="noopener">{{ brand.repoLabel }}{{ brand.repo }}</a>
-        <span class="sep">·</span>
-        <a :href="qqHref" target="_blank" rel="noopener">{{ brand.qqLabel }}{{ brand.qq }}</a>
-        <span class="sep">·</span>
-        <a :href="brand.picUrl" target="_blank" rel="noopener">{{ brand.picLabel }}{{ brand.picText }}</a>
       </div>
     </footer>
   </div>
 </template>
 
 <style scoped lang="scss">
-// ========= 全局色变量(同时适配亮 / 暗) =========
 .landing {
   --lp-bg: #ffffff;
   --lp-bg-soft: #f7fbff;
@@ -229,7 +212,6 @@ const features = [
   50%      { background-position: 100% 50%; }
 }
 
-// ========= 顶部导航 =========
 .nav {
   position: sticky;
   top: 0;
@@ -298,7 +280,6 @@ const features = [
   .btn-login { font-weight: 600; }
 }
 
-// ========= Hero =========
 .hero {
   position: relative;
   overflow: hidden;
@@ -384,7 +365,6 @@ const features = [
     transition: background .2s;
   }
   .meta-link:hover { background: var(--lp-card); color: #409eff; }
-  .dot-sep { color: var(--lp-text-mute); }
 }
 
 .hero-preview {
@@ -433,7 +413,6 @@ const features = [
   img { display: block; width: 100%; height: auto; }
 }
 
-// ========= 三张卖点卡 =========
 .section {
   padding: 40px 24px 60px;
   position: relative;
@@ -497,7 +476,6 @@ const features = [
   margin-top: 40px;
 }
 
-// ========= Footer =========
 .footer {
   margin-top: auto;
   background: var(--lp-bg-soft);
@@ -515,7 +493,6 @@ const features = [
   .sep { margin: 0 8px; color: var(--lp-border); }
 }
 
-// ========= 响应式 =========
 @media (max-width: 1100px) {
   .hero-inner { grid-template-columns: 1fr; }
   .hero-preview { order: 2; margin-top: 30px; }

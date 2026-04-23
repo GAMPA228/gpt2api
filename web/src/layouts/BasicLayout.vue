@@ -18,18 +18,15 @@ const siteName = computed(() => site.get('site.name', 'GPT2API'))
 const siteLogo = computed(() => site.get('site.logo_url', ''))
 const siteFooter = computed(() => site.get('site.footer', ''))
 
-// 版权/广告条(XOR + Base64 混淆,不要直接把明文写在模板里)
 const brand = brandParts()
 const brandRepoHref = `https://${brand.repo}`
-const brandQQHref = `https://qm.qq.com/q/${brand.qq}`
 
-const { menu, user, role, permissions } = storeToRefs(store)
+const { menu, user, role } = storeToRefs(store)
 const collapsed = ref(false)
 const loadingMenu = ref(false)
 
 const activePath = computed(() => route.path)
 
-// 生成面包屑用的路径映射
 const titleMap = computed(() => {
   const m = new Map<string, string>()
   function walk(items: MenuItem[]) {
@@ -85,12 +82,10 @@ watch(() => store.isLoggedIn, (v) => { if (v) loadMenu() })
         router
       >
         <template v-for="group in menu" :key="group.key">
-          <!-- 无子节点:直接渲染成一级 item -->
           <el-menu-item v-if="!group.children?.length && group.path" :index="group.path">
             <el-icon v-if="group.icon"><component :is="group.icon" /></el-icon>
             <template #title>{{ group.title }}</template>
           </el-menu-item>
-          <!-- 有子节点:分组 -->
           <el-sub-menu v-else-if="group.children?.length" :index="group.key">
             <template #title>
               <el-icon v-if="group.icon"><component :is="group.icon" /></el-icon>
@@ -163,14 +158,8 @@ watch(() => store.isLoggedIn, (v) => { if (v) loadMenu() })
         <div class="footer-line brand-line">
           <b class="brand-name">{{ brand.brand }}</b>
           <span class="sep">{{ brand.sep }}</span>
-          <span>{{ brand.qqLabel }}</span>
-          <a :href="brandQQHref" target="_blank" rel="noopener" class="footer-link">{{ brand.qq }}</a>
-          <span class="sep">{{ brand.sep }}</span>
           <span>{{ brand.repoLabel }}</span>
           <a :href="brandRepoHref" target="_blank" rel="noopener" class="footer-link">{{ brand.repo }}</a>
-          <span class="sep">{{ brand.sep }}</span>
-          <span>{{ brand.picLabel }}</span>
-          <a :href="brand.picUrl" target="_blank" rel="noopener" class="footer-link pic-link">{{ brand.picText }}</a>
         </div>
         <div v-if="siteFooter" class="footer-line footer-custom">{{ siteFooter }}</div>
       </el-footer>
@@ -282,7 +271,6 @@ watch(() => store.isLoggedIn, (v) => { if (v) loadMenu() })
   text-decoration: none;
   margin: 0 2px;
 }
-.footer-link.pic-link { color: var(--el-color-success); }
 .footer-link:hover { text-decoration: underline; }
 
 .fade-enter-active, .fade-leave-active { transition: opacity .15s; }

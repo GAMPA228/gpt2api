@@ -11,16 +11,16 @@ import (
 	"github.com/jmoiron/sqlx"
 )
 
-// ErrNotFound 未找到任务。
+// ErrNotFound 鏈壘鍒颁换鍔°€?
 var ErrNotFound = errors.New("image: task not found")
 
-// DAO image_tasks 表访问对象。
+// DAO image_tasks 琛ㄨ闂璞°€?
 type DAO struct{ db *sqlx.DB }
 
-// NewDAO 构造。
+// NewDAO 鏋勯€犮€?
 func NewDAO(db *sqlx.DB) *DAO { return &DAO{db: db} }
 
-// Create 插入新任务。
+// Create 鎻掑叆鏂颁换鍔°€?
 func (d *DAO) Create(ctx context.Context, t *Task) error {
 	res, err := d.db.ExecContext(ctx, `
 INSERT INTO image_tasks
@@ -42,7 +42,7 @@ VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, NOW())`,
 	return nil
 }
 
-// MarkRunning 标记为运行中(记录起始时间 + account_id)。
+// MarkRunning 鏍囪涓鸿繍琛屼腑(璁板綍璧峰鏃堕棿 + account_id)銆?
 func (d *DAO) MarkRunning(ctx context.Context, taskID string, accountID uint64) error {
 	_, err := d.db.ExecContext(ctx, `
 UPDATE image_tasks
@@ -51,17 +51,17 @@ UPDATE image_tasks
 	return err
 }
 
-// SetAccount 在 runOnce 拿到账号 lease 后立刻写入 account_id。
-// 独立出来是因为 MarkRunning 只在 status=queued/dispatched 时生效,
-// 而调度完成后 status 已经是 running,需要一个幂等的小方法。
-// 图片代理端点按 task_id 查账号时依赖这个字段。
+// SetAccount 鍦?runOnce 鎷垮埌璐﹀彿 lease 鍚庣珛鍒诲啓鍏?account_id銆?
+// 鐙珛鍑烘潵鏄洜涓?MarkRunning 鍙湪 status=queued/dispatched 鏃剁敓鏁?
+// 鑰岃皟搴﹀畬鎴愬悗 status 宸茬粡鏄?running,闇€瑕佷竴涓箓绛夌殑灏忔柟娉曘€?
+// 鍥剧墖浠ｇ悊绔偣鎸?task_id 鏌ヨ处鍙锋椂渚濊禆杩欎釜瀛楁銆?
 func (d *DAO) SetAccount(ctx context.Context, taskID string, accountID uint64) error {
 	_, err := d.db.ExecContext(ctx,
 		`UPDATE image_tasks SET account_id = ? WHERE task_id = ?`, accountID, taskID)
 	return err
 }
 
-// MarkSuccess 更新成功状态。
+// MarkSuccess 鏇存柊鎴愬姛鐘舵€併€?
 func (d *DAO) MarkSuccess(ctx context.Context, taskID, convID string, fileIDs, resultURLs []string, creditCost int64) error {
 	fidB, _ := json.Marshal(fileIDs)
 	urlB, _ := json.Marshal(resultURLs)
@@ -77,14 +77,14 @@ UPDATE image_tasks
 	return err
 }
 
-// UpdateCost 仅更新 credit_cost(Runner 成功后由网关层调用)。
+// UpdateCost 浠呮洿鏂?credit_cost(Runner 鎴愬姛鍚庣敱缃戝叧灞傝皟鐢?銆?
 func (d *DAO) UpdateCost(ctx context.Context, taskID string, cost int64) error {
 	_, err := d.db.ExecContext(ctx,
 		`UPDATE image_tasks SET credit_cost = ? WHERE task_id = ?`, cost, taskID)
 	return err
 }
 
-// MarkFailed 更新失败状态(带错误码)。
+// MarkFailed 鏇存柊澶辫触鐘舵€?甯﹂敊璇爜)銆?
 func (d *DAO) MarkFailed(ctx context.Context, taskID, errorCode string) error {
 	_, err := d.db.ExecContext(ctx, `
 UPDATE image_tasks
@@ -93,7 +93,7 @@ UPDATE image_tasks
 	return err
 }
 
-// Get 根据对外 task_id 查询。
+// Get 鏍规嵁瀵瑰 task_id 鏌ヨ銆?
 func (d *DAO) Get(ctx context.Context, taskID string) (*Task, error) {
 	var t Task
 	err := d.db.GetContext(ctx, &t, `
@@ -111,7 +111,7 @@ SELECT id, task_id, user_id, key_id, model_id, account_id, prompt, n, size, upsc
 	return &t, nil
 }
 
-// ListByUser 按用户分页。
+// ListByUser 鎸夌敤鎴峰垎椤点€?
 func (d *DAO) ListByUser(ctx context.Context, userID uint64, limit, offset int) ([]Task, error) {
 	if limit <= 0 {
 		limit = 20
@@ -128,7 +128,7 @@ SELECT id, task_id, user_id, key_id, model_id, account_id, prompt, n, size, upsc
 	return out, err
 }
 
-// DeleteByUserTaskID 删除当前用户自己的任务。
+// DeleteByUserTaskID 鍒犻櫎褰撳墠鐢ㄦ埛鑷繁鐨勪换鍔°€?
 func (d *DAO) DeleteByUserTaskID(ctx context.Context, userID uint64, taskID string) error {
 	res, err := d.db.ExecContext(ctx,
 		`DELETE FROM image_tasks WHERE user_id = ? AND task_id = ?`, userID, taskID)
@@ -142,7 +142,65 @@ func (d *DAO) DeleteByUserTaskID(ctx context.Context, userID uint64, taskID stri
 	return nil
 }
 
-// DecodeFileIDs 把 JSON 列解出字符串数组。
+// AdminTaskRow 鏄鐞嗗憳瑙嗚鐨勭敓鎴愯褰曡,JOIN 浜?users 琛ㄧ殑閭銆?
+type AdminTaskRow struct {
+	Task
+	UserEmail string `db:"user_email" json:"user_email"`
+}
+
+// AdminTaskFilter 绠＄悊鍛樻煡璇㈣繃婊ゆ潯浠躲€?
+type AdminTaskFilter struct {
+	UserID  uint64
+	Keyword string // 妯＄硦鍖归厤 prompt / email
+	Status  string
+}
+
+// ListAdmin 鍏ㄥ眬鍒嗛〉(admin)銆?
+func (d *DAO) ListAdmin(ctx context.Context, f AdminTaskFilter, limit, offset int) ([]AdminTaskRow, int64, error) {
+	if limit <= 0 {
+		limit = 20
+	}
+	where := "1=1"
+	args := []interface{}{}
+	if f.UserID > 0 {
+		where += " AND t.user_id = ?"
+		args = append(args, f.UserID)
+	}
+	if f.Status != "" {
+		where += " AND t.status = ?"
+		args = append(args, f.Status)
+	}
+	if f.Keyword != "" {
+		like := "%" + f.Keyword + "%"
+		where += " AND (t.prompt LIKE ? OR u.email LIKE ?)"
+		args = append(args, like, like)
+	}
+
+	var total int64
+	countSQL := `SELECT COUNT(*) FROM image_tasks t LEFT JOIN users u ON u.id=t.user_id WHERE ` + where
+	if err := d.db.GetContext(ctx, &total, countSQL, args...); err != nil {
+		return nil, 0, err
+	}
+
+	listSQL := `
+SELECT t.id, t.task_id, t.user_id, t.key_id, t.model_id, t.account_id,
+       t.prompt, t.n, t.size, t.upscale, t.status,
+       t.conversation_id, t.file_ids, t.result_urls, t.error,
+       t.estimated_credit, t.credit_cost,
+       t.created_at, t.started_at, t.finished_at,
+       COALESCE(u.email, '') AS user_email
+  FROM image_tasks t
+  LEFT JOIN users u ON u.id = t.user_id
+ WHERE ` + where + `
+ ORDER BY t.id DESC
+ LIMIT ? OFFSET ?`
+	args = append(args, limit, offset)
+	var out []AdminTaskRow
+	err := d.db.SelectContext(ctx, &out, listSQL, args...)
+	return out, total, err
+}
+
+// DecodeFileIDs 鎶?JSON 鍒楄В鍑哄瓧绗︿覆鏁扮粍銆?
 func (t *Task) DecodeFileIDs() []string {
 	var out []string
 	if len(t.FileIDs) > 0 {
@@ -151,7 +209,7 @@ func (t *Task) DecodeFileIDs() []string {
 	return out
 }
 
-// DecodeResultURLs 把 JSON 列解出字符串数组。
+// DecodeResultURLs 鎶?JSON 鍒楄В鍑哄瓧绗︿覆鏁扮粍銆?
 func (t *Task) DecodeResultURLs() []string {
 	var out []string
 	if len(t.ResultURLs) > 0 {

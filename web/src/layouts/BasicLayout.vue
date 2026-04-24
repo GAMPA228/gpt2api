@@ -1,11 +1,12 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { storeToRefs } from 'pinia'
 import { useUserStore } from '@/stores/user'
 import { useUIStore } from '@/stores/ui'
 import { useSiteStore } from '@/stores/site'
 import { brandParts } from '@/utils/brand'
+import { APP_VERSION } from '@/version'
 import type { MenuItem } from '@/api/auth'
 
 const store = useUserStore()
@@ -22,8 +23,41 @@ const brand = brandParts()
 const brandRepoHref = `https://${brand.repo}`
 
 const { menu, user, role } = storeToRefs(store)
-const collapsed = ref(false)
+const collapsed = ref(false)      // 妗岄潰绔姌鍙犵姸鎬?
+const drawerOpen = ref(false)     // 绉诲姩绔娊灞夊睍寮€鐘舵€?
+const isMobile = ref(false)
 const loadingMenu = ref(false)
+
+const MOBILE_BP = 768
+
+function checkMobile() {
+  const mobile = window.innerWidth < MOBILE_BP
+  if (mobile !== isMobile.value) {
+    isMobile.value = mobile
+    if (!mobile) drawerOpen.value = false  // 鍒囨崲鍒版闈㈡椂鑷姩鍏虫娊灞?
+  }
+}
+
+// 椤舵爮姹夊牎鎸夐挳琛屼负:绉诲姩绔帶鍒舵娊灞?妗岄潰绔帶鍒舵姌鍙?
+function toggleSidebar() {
+  if (isMobile.value) {
+    drawerOpen.value = !drawerOpen.value
+  } else {
+    collapsed.value = !collapsed.value
+  }
+}
+
+// 渚ф爮鍥炬爣:绉诲姩绔缁堢敤 Menu 鍥炬爣,妗岄潰绔窡闅忔姌鍙犵姸鎬?
+const menuIcon = computed(() => {
+  if (isMobile.value) return 'Menu'
+  return collapsed.value ? 'Expand' : 'Fold'
+})
+
+// 渚ф爮瀹為檯鏄惁鎶樺彔(绉诲姩绔娊灞夊睍寮€鏃朵笉鎶樺彔)
+const sideCollapsed = computed(() => isMobile.value ? false : collapsed.value)
+
+// 渚ф爮瀹藉害(妗岄潰绔姩鎬?绉诲姩绔浐瀹?240px 鐢?CSS 绠＄悊)
+const asideWidth = computed(() => isMobile.value ? '0px' : (collapsed.value ? '64px' : '220px'))
 
 const activePath = computed(() => route.path)
 
@@ -60,21 +94,41 @@ function goto(path?: string) {
   if (path) router.push(path)
 }
 
-onMounted(loadMenu)
+// 璺敱鍒囨崲鏃跺叧闂Щ鍔ㄧ鎶藉眽
+watch(() => route.path, () => {
+  if (isMobile.value) drawerOpen.value = false
+})
+
+onMounted(() => {
+  checkMobile()
+  window.addEventListener('resize', checkMobile)
+  loadMenu()
+})
+onUnmounted(() => window.removeEventListener('resize', checkMobile))
 watch(() => store.isLoggedIn, (v) => { if (v) loadMenu() })
 </script>
 
 <template>
   <el-container class="layout-root">
-    <el-aside :width="collapsed ? '64px' : '220px'" class="sidebar">
+    <!-- 绉诲姩绔伄缃╁眰 -->
+    <transition name="overlay-fade">
+      <div v-if="isMobile && drawerOpen" class="sidebar-overlay" @click="drawerOpen = false" />
+    </transition>
+
+    <!-- 渚ф爮:妗岄潰 inline / 绉诲姩绔?fixed drawer -->
+    <el-aside
+      :width="asideWidth"
+      class="sidebar"
+      :class="{ 'sidebar-mobile': isMobile, 'sidebar-open': isMobile && drawerOpen }"
+    >
       <div class="logo">
         <img v-if="siteLogo" :src="siteLogo" class="logo-img" alt="logo" />
         <span v-else class="mark">{{ (siteName[0] || 'G').toUpperCase() }}</span>
-        <span v-if="!collapsed" class="title">{{ siteName }}</span>
+        <span v-if="!sideCollapsed" class="title">{{ siteName }}</span>
       </div>
       <el-menu
         :default-active="activePath"
-        :collapse="collapsed"
+        :collapse="sideCollapsed"
         background-color="transparent"
         text-color="#cfd3dc"
         active-text-color="#ffffff"
@@ -102,18 +156,22 @@ watch(() => store.isLoggedIn, (v) => { if (v) loadMenu() })
           </el-sub-menu>
         </template>
       </el-menu>
+
+      <div class="sidebar-version" :class="{ collapsed: sideCollapsed }">
+        <span class="ver-text">{{ sideCollapsed ? APP_VERSION.replace('v','') : APP_VERSION }}</span>
+      </div>
     </el-aside>
 
-    <el-container>
+    <el-container class="right-container">
       <el-header class="topbar">
         <div class="left">
-          <el-button link @click="collapsed = !collapsed">
-            <el-icon :size="18"><component :is="collapsed ? 'Expand' : 'Fold'" /></el-icon>
+          <el-button link @click="toggleSidebar">
+            <el-icon :size="18"><component :is="menuIcon" /></el-icon>
           </el-button>
           <span class="crumb">{{ currentTitle }}</span>
         </div>
         <div class="right">
-          <el-tooltip :content="ui.isDark ? '切换到亮色' : '切换到暗色'" placement="bottom">
+          <el-tooltip :content="ui.isDark ? '鍒囨崲鍒颁寒鑹? : '鍒囨崲鍒版殫鑹?" placement="bottom">
             <el-button link class="theme-btn" @click="ui.toggleDark()">
               <el-icon :size="18">
                 <component :is="ui.isDark ? 'Sunny' : 'Moon'" />
@@ -126,19 +184,19 @@ watch(() => store.isLoggedIn, (v) => { if (v) loadMenu() })
                 {{ (user?.nickname || user?.email || 'U').slice(0, 1).toUpperCase() }}
               </el-avatar>
               <span class="nick">{{ user?.nickname || user?.email }}</span>
-              <el-tag v-if="role === 'admin'" type="warning" size="small">管理员</el-tag>
+              <el-tag v-if="role === 'admin' && !isMobile" type="warning" size="small">绠＄悊鍛?/el-tag>
               <el-icon><ArrowDown /></el-icon>
             </span>
             <template #dropdown>
               <el-dropdown-menu>
                 <el-dropdown-item command="/personal/dashboard">
-                  <el-icon><User /></el-icon> 个人中心
+                  <el-icon><User /></el-icon> 涓汉涓績
                 </el-dropdown-item>
                 <el-dropdown-item command="/personal/billing">
-                  <el-icon><Wallet /></el-icon> 账单
+                  <el-icon><Wallet /></el-icon> 璐﹀崟
                 </el-dropdown-item>
                 <el-dropdown-item divided command="logout">
-                  <el-icon><SwitchButton /></el-icon> 退出登录
+                  <el-icon><SwitchButton /></el-icon> 閫€鍑虹櫥褰?
                 </el-dropdown-item>
               </el-dropdown-menu>
             </template>
@@ -168,14 +226,53 @@ watch(() => store.isLoggedIn, (v) => { if (v) loadMenu() })
 </template>
 
 <style scoped lang="scss">
-.layout-root { height: 100vh; }
+// 鈹€鈹€鈹€ 鏍瑰鍣?鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
+.layout-root { height: 100vh; overflow: hidden; }
 
+.right-container { min-width: 0; flex: 1; overflow: hidden; }
+
+// 鈹€鈹€鈹€ 渚ф爮 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 .sidebar {
   background: var(--gp-sidebar-bg);
-  transition: width .2s;
+  transition: width .22s ease;
   overflow-x: hidden;
+  display: flex !important;
+  flex-direction: column;
+  .side-menu {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+  }
 }
 
+// 绉诲姩绔細渚ф爮鑴辩鏂囨。娴佸彉鎴?fixed overlay drawer
+.sidebar-mobile {
+  position: fixed !important;
+  left: 0;
+  top: 0;
+  height: 100vh;
+  width: 240px !important;  // 瑕嗙洊 :width 缁戝畾
+  z-index: 1001;
+  transform: translateX(-100%);
+  transition: transform .25s ease, box-shadow .25s ease;
+  box-shadow: none;
+}
+.sidebar-mobile.sidebar-open {
+  transform: translateX(0);
+  box-shadow: 4px 0 24px rgba(0, 0, 0, 0.35);
+}
+
+// 绉诲姩绔伄缃?
+.sidebar-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  z-index: 1000;
+}
+.overlay-fade-enter-active, .overlay-fade-leave-active { transition: opacity .25s; }
+.overlay-fade-enter-from, .overlay-fade-leave-to { opacity: 0; }
+
+// 鈹€鈹€鈹€ Logo 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 .logo {
   height: 60px;
   display: flex;
@@ -185,58 +282,80 @@ watch(() => store.isLoggedIn, (v) => { if (v) loadMenu() })
   color: #fff;
   font-weight: 700;
   letter-spacing: 1px;
+  flex-shrink: 0;
   .logo-img {
-    width: 32px; height: 32px; border-radius: 8px; object-fit: contain; background: #fff;
+    width: 32px; height: 32px; border-radius: 8px;
+    object-fit: contain; background: #fff;
   }
   .mark {
     display: inline-flex;
-    width: 32px;
-    height: 32px;
+    width: 32px; height: 32px;
     border-radius: 8px;
     background: linear-gradient(135deg,#409eff,#67c23a);
     align-items: center; justify-content: center;
     font-size: 14px;
+    flex-shrink: 0;
   }
-  .title { font-size: 16px; }
+  .title { font-size: 16px; white-space: nowrap; overflow: hidden; }
 }
 
 .side-menu {
-  border-right: none;
+  border-right: none !important;
   --el-menu-hover-bg-color: rgba(255,255,255,0.06);
 }
 
+// 鈹€鈹€鈹€ 椤舵爮 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 .topbar {
   display: flex;
   align-items: center;
   justify-content: space-between;
   height: 56px;
+  min-height: 56px;
   background: var(--el-bg-color);
   color: var(--el-text-color-primary);
   border-bottom: 1px solid var(--el-border-color-light);
   padding: 0 18px;
-  .left { display: flex; align-items: center; gap: 12px; }
-  .crumb { font-size: 16px; font-weight: 600; }
+  flex-shrink: 0;
+  .left { display: flex; align-items: center; gap: 10px; min-width: 0; }
+  .crumb {
+    font-size: 16px;
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
   .user-entry {
     display: inline-flex;
     align-items: center;
     gap: 8px;
     cursor: pointer;
     color: var(--el-text-color-primary);
-    .nick { font-size: 14px; }
+    .nick {
+      font-size: 14px;
+      max-width: 120px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
   }
   .right {
     display: inline-flex;
     align-items: center;
-    gap: 12px;
+    gap: 10px;
+    flex-shrink: 0;
   }
   .theme-btn { padding: 0 6px; }
 }
 
+// 鈹€鈹€鈹€ 涓诲尯 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 .main {
   background: var(--gp-bg);
   padding: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 
+// 鈹€鈹€鈹€ 椤佃剼 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 .footer {
   background: transparent;
   text-align: center;
@@ -250,6 +369,7 @@ watch(() => store.isLoggedIn, (v) => { if (v) loadMenu() })
   align-items: center;
   justify-content: center;
   gap: 2px;
+  flex-shrink: 0;
 }
 .footer-line { line-height: 1.6; }
 .brand-line .brand-name {
@@ -262,17 +382,42 @@ watch(() => store.isLoggedIn, (v) => { if (v) loadMenu() })
   margin: 0 4px;
   user-select: none;
 }
-.footer-custom {
-  color: var(--el-text-color-placeholder);
-  font-size: 11px;
-}
-.footer-link {
-  color: var(--el-color-primary);
-  text-decoration: none;
-  margin: 0 2px;
-}
+.footer-custom { color: var(--el-text-color-placeholder); font-size: 11px; }
+.footer-link { color: var(--el-color-primary); text-decoration: none; margin: 0 2px; }
+.footer-link.pic-link { color: var(--el-color-success); }
 .footer-link:hover { text-decoration: underline; }
 
+// 鈹€鈹€鈹€ 杩囨浮 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 .fade-enter-active, .fade-leave-active { transition: opacity .15s; }
 .fade-enter-from, .fade-leave-to { opacity: 0; }
+
+// 鈹€鈹€鈹€ 鐗堟湰鍙?鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
+.sidebar-version {
+  position: sticky;
+  bottom: 0;
+  padding: 10px 16px;
+  text-align: center;
+  border-top: 1px solid rgba(255,255,255,0.07);
+  background: var(--gp-sidebar-bg);
+  flex-shrink: 0;
+  .ver-text {
+    display: inline-block;
+    font-size: 11px;
+    color: rgba(255,255,255,0.28);
+    letter-spacing: 0.5px;
+    user-select: none;
+    white-space: nowrap;
+  }
+  &.collapsed .ver-text { font-size: 9px; letter-spacing: 0; }
+}
+
+// 鈹€鈹€鈹€ 绉诲姩绔ˉ涓?鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
+@media (max-width: 767px) {
+  .topbar {
+    padding: 0 12px;
+    .crumb { font-size: 14px; }
+    .nick { display: none; }
+  }
+  .footer { display: none; }  // 绉诲姩绔〉鑴氬崰绌洪棿,闅愯棌
+}
 </style>

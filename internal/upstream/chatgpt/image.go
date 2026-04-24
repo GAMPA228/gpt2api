@@ -551,10 +551,20 @@ func (c *Client) PollConversationForImages(ctx context.Context, convID string, o
 		if err != nil {
 			if ue, ok := err.(*UpstreamError); ok && ue.Status == 429 {
 				consecutive429++
-				if consecutive429 >= 3 {
-					return PollStatusError, nil, nil
+				// image poll 阶段偶发 429 很常见，直接判死会把本可恢复的出图变成 502。
+				// 这里改成退避重试直到总超时，由调用方按 MaxWait 兜底。
+				backoff := 10 * time.Second
+				if consecutive429 > 3 {
+					backoff = 15 * time.Second
 				}
-				sleep(ctx, 10*time.Second)
+				if consecutive429 > 6 {
+					backoff = 20 * time.Second
+				}
+				sleep(ctx, backoff)
+				continue
+			}
+			if _, ok := err.(*UpstreamError); ok {
+				sleep(ctx, opt.Interval)
 				continue
 			}
 			sleep(ctx, opt.Interval)

@@ -1,10 +1,11 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   listMyModels,
   listMyUsageLogs,
   listMyImageTasks,
+  deleteMyImageTask,
   getMyUsageStats,
   type SimpleModel,
   type UsageItem,
@@ -23,10 +24,10 @@ const imageModels = computed(() => models.value.filter((m) => m.type === 'image'
 const selectedChatModel = ref<string>('')
 const selectedImageModel = ref<string>('')
 
-// 原点:浏览器当前地址,用于 SDK 示例的 base_url
+// 当前浏览器地址，用于 SDK 示例的 base_url
 const origin = computed(() => window.location.origin)
 
-// ---------- 当前用户汇总 ----------
+// ---------- 当前用户概览 ----------
 const stats = ref<MyStatsResp | null>(null)
 const statsLoading = ref(false)
 
@@ -66,9 +67,10 @@ function chatPageChange(p: number) {
 
 // ---------- 图片历史 ----------
 const imageTasks = ref<ImageTask[]>([])
-const imagePage = ref({ limit: 12, offset: 0 })
+const imagePage = ref({ limit: 8, offset: 0 })
 const imageLoading = ref(false)
 const hasMoreImage = ref(false)
+const deletingTaskID = ref<string>('')
 const previewVisible = ref(false)
 const previewList = ref<string[]>([])
 const previewIndex = ref(0)
@@ -116,6 +118,22 @@ function downloadImage(url: string, taskID: string, idx = 0) {
   document.body.removeChild(a)
 }
 
+async function deleteImageTask(t: ImageTask) {
+  await ElMessageBox.confirm(
+    `确认删除该图片任务吗？删除后将无法恢复（task_id=${t.task_id}）。`,
+    '删除图片任务',
+    { confirmButtonText: '删除', cancelButtonText: '取消', type: 'warning' },
+  )
+  deletingTaskID.value = t.task_id
+  try {
+    await deleteMyImageTask(t.task_id)
+    imageTasks.value = imageTasks.value.filter((x) => x.task_id !== t.task_id)
+    ElMessage.success('已删除')
+  } finally {
+    deletingTaskID.value = ''
+  }
+}
+
 // ---------- SDK 代码示例 ----------
 const chatCurl = computed(() => {
   const model = selectedChatModel.value || 'gpt-5'
@@ -126,7 +144,7 @@ const chatCurl = computed(() => {
     "model": "${model}",
     "stream": true,
     "messages": [
-      {"role": "user", "content": "你好,介绍一下你自己"}
+      {"role": "user", "content": "你好，介绍一下你自己"}
     ]
   }'`
 })
@@ -185,7 +203,7 @@ async function copy(text: string) {
     await navigator.clipboard.writeText(text)
     ElMessage.success('已复制到剪贴板')
   } catch {
-    ElMessage.error('复制失败,请手动选择文本')
+    ElMessage.error('复制失败，请手动选择文本')
   }
 }
 
@@ -209,7 +227,7 @@ onMounted(async () => {
     if (firstChat) selectedChatModel.value = firstChat.slug
     if (firstImage) selectedImageModel.value = firstImage.slug
   } catch {
-    // 忽略
+    // ignore
   }
   loadStats()
   if (ENABLE_CHAT_MODEL) loadChatLogs()
@@ -224,12 +242,12 @@ onMounted(async () => {
         <h2 class="page-title">接口文档 & 用量</h2>
         <p class="desc">
           <template v-if="ENABLE_CHAT_MODEL">
-            外部调用走 <code>/v1/chat/completions</code> 与 <code>/v1/images/generations</code>,
+            外部调用支持 <code>/v1/chat/completions</code> 与 <code>/v1/images/generations</code>,
           </template>
           <template v-else>
-            外部调用走 <code>/v1/images/generations</code>,
+            外部调用支持 <code>/v1/images/generations</code>,
           </template>
-          下面给出 curl / Python SDK 代码片段;个人用量与图片任务汇总在这里。若想在浏览器里直接体验,请打开「在线体验」。
+          下面给出 curl / Python SDK 代码片段；个人用量与图片任务汇总也在这里。若想在浏览器里直接体验，请打开「在线体验」。
         </p>
       </div>
       <div class="hero-stats" v-loading="statsLoading">
@@ -262,12 +280,12 @@ onMounted(async () => {
               <el-option
                 v-for="m in chatModels"
                 :key="m.id"
-                :label="`${m.slug}${m.description ? ' · ' + m.description : ''}`"
+                :label="`${m.slug}${m.description ? ' 路 ' + m.description : ''}`"
                 :value="m.slug"
               />
             </el-select>
             <router-link to="/personal/keys">
-              <el-button text type="primary">没有 Key?去「API Keys」创建</el-button>
+              <el-button text type="primary">没有 Key? 去「API Keys」创建</el-button>
             </router-link>
           </div>
 
@@ -335,7 +353,7 @@ onMounted(async () => {
               <el-option
                 v-for="m in imageModels"
                 :key="m.id"
-                :label="`${m.slug}${m.description ? ' · ' + m.description : ''}`"
+                :label="`${m.slug}${m.description ? ' 路 ' + m.description : ''}`"
                 :value="m.slug"
               />
             </el-select>
@@ -360,7 +378,7 @@ onMounted(async () => {
           </div>
           <div v-loading="imageLoading">
             <div v-if="imageTasks.length === 0 && !imageLoading" class="empty">
-              暂无图片任务,复制上方代码调用一次即可生成记录。
+              暂无图片任务，复制上方代码调用一次即可生成记录。
             </div>
             <div class="grid">
               <el-card
@@ -374,7 +392,14 @@ onMounted(async () => {
                   :class="{ clickable: !!t.image_urls?.length }"
                   @click="openImagePreview(t.image_urls || [], 0)"
                 >
-                  <img v-if="t.image_urls?.[0]" :src="t.image_urls[0]" :alt="t.prompt" />
+                  <img
+                    v-if="t.image_urls?.[0]"
+                    :src="t.image_urls[0]"
+                    :alt="t.prompt"
+                    loading="lazy"
+                    decoding="async"
+                    fetchpriority="low"
+                  />
                   <div v-else class="thumb-ph">
                     <el-icon :size="32"><PictureRounded /></el-icon>
                     <div class="s">{{ t.status }}</div>
@@ -390,7 +415,11 @@ onMounted(async () => {
                   <div v-if="t.image_urls?.length" class="actions">
                     <el-button link type="primary" @click="openImagePreview(t.image_urls, 0)">预览</el-button>
                     <el-button link @click="downloadImage(t.image_urls[0], t.task_id, 0)">下载</el-button>
+                    <el-button link type="danger" :loading="deletingTaskID === t.task_id" @click="deleteImageTask(t)">删除</el-button>
                     <span v-if="t.image_urls.length > 1" class="mute">共 {{ t.image_urls.length }} 张</span>
+                  </div>
+                  <div v-else class="actions">
+                    <el-button link type="danger" :loading="deletingTaskID === t.task_id" @click="deleteImageTask(t)">删除</el-button>
                   </div>
                   <div class="foot">
                     <span class="mute">{{ formatDateTime(t.created_at) }}</span>
@@ -501,3 +530,5 @@ onMounted(async () => {
   .hero-stats { gap: 16px; }
 }
 </style>
+
+

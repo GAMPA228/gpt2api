@@ -1,47 +1,59 @@
-# syntax=docker/dockerfile:1.6
-#
-# Multi-stage build:
-# - go-builder: build gpt2api + goose
-# - web-builder: build web/dist
-# - runtime: alpine runtime image
-#
-# This Dockerfile does not require host Go/Node or prebuilt artifacts.
-
-FROM golang:1.26-alpine AS go-builder
+FROM --platform=$BUILDPLATFORM golang:1.26-alpine AS go-builder
 WORKDIR /src
+
 ARG GOPROXY=https://goproxy.cn,direct
 ARG GOSUMDB=sum.golang.org
 ARG TARGETOS=linux
-ARG TARGETARCH=amd64
+ARG TARGETARCH
+ARG BUILDPLATFORM
+ARG TARGETPLATFORM
+ARG BUILD_JOBS=2
+
 ENV GOPROXY=$GOPROXY \
-    GOSUMDB=$GOSUMDB
+    GOSUMDB=$GOSUMDB \
+    GOMAXPROCS=$BUILD_JOBS
 
 COPY go.mod go.sum ./
-RUN --mount=type=cache,target=/go/pkg/mod \
-    go mod download
+RUN go mod download
 
 COPY . .
-RUN --mount=type=cache,target=/go/pkg/mod \
-    --mount=type=cache,target=/root/.cache/go-build \
-    CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -o /out/gpt2api ./cmd/server
-RUN --mount=type=cache,target=/go/pkg/mod \
-    --mount=type=cache,target=/root/.cache/go-build \
-    GOBIN=/out CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go install github.com/pressly/goose/v3/cmd/goose@v3.20.0
+RUN set -eux; \
+    os="${TARGETOS}"; \
+    arch="${TARGETARCH}"; \
+    if [ -z "${os}" ]; then os="$(go env GOOS)"; fi; \
+    if [ -z "${arch}" ]; then arch="$(go env GOARCH)"; fi; \
+    echo "go-builder: BUILDPLATFORM=${BUILDPLATFORM} TARGETPLATFORM=${TARGETPLATFORM} GOOS=${os} GOARCH=${arch}"; \
+    CGO_ENABLED=0 GOOS="${os}" GOARCH="${arch}" \
+      go build -p=${BUILD_JOBS} -o /out/gpt2api ./cmd/server
 
-FROM node:20-alpine AS web-builder
+RUN mkdir -p /tmp/goose-build \
+    && cd /tmp/goose-build \
+    && go mod init goose-build \
+    && go get github.com/pressly/goose/v3/cmd/goose@v3.20.0 \
+    && os="${TARGETOS}" \
+    && arch="${TARGETARCH}" \
+    && if [ -z "${os}" ]; then os="$(go env GOOS)"; fi \
+    && if [ -z "${arch}" ]; then arch="$(go env GOARCH)"; fi \
+    && echo "goose-builder: BUILDPLATFORM=${BUILDPLATFORM} TARGETPLATFORM=${TARGETPLATFORM} GOOS=${os} GOARCH=${arch}" \
+    && CGO_ENABLED=0 GOOS="${os}" GOARCH="${arch}" \
+       go build -p=${BUILD_JOBS} -o /out/goose github.com/pressly/goose/v3/cmd/goose
+
+FROM --platform=$BUILDPLATFORM node:20-alpine AS web-builder
 WORKDIR /src/web
+
 ARG NPM_REGISTRY=https://registry.npmmirror.com
+ARG BUILD_JOBS=2
+
+ENV npm_config_jobs=$BUILD_JOBS
 
 COPY web/package.json web/package-lock.json ./
-RUN --mount=type=cache,target=/root/.npm \
-    npm config set registry ${NPM_REGISTRY} \
-    && \
-    npm ci --no-audit --no-fund --loglevel=error
+RUN npm config set registry ${NPM_REGISTRY} \
+    && npm ci --no-audit --no-fund --loglevel=error
 
 COPY web/ ./
 RUN npm run build
 
-FROM alpine:3.20
+FROM --platform=$TARGETPLATFORM alpine:3.20
 
 RUN sed -i 's@https\?://dl-cdn.alpinelinux.org@http://mirrors.ustc.edu.cn@g' /etc/apk/repositories \
     && apk add --no-cache ca-certificates tzdata curl bash mariadb-client \

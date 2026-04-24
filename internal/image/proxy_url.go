@@ -22,6 +22,10 @@ func init() {
 
 const ImageProxyTTL = 24 * time.Hour
 
+func BuildMyImageProxyURL(taskID string, idx int) string {
+	return fmt.Sprintf("/api/me/images/proxy/%s/%d", taskID, idx)
+}
+
 func BuildImageProxyURL(taskID string, idx int, ttl time.Duration) string {
 	if ttl <= 0 {
 		ttl = ImageProxyTTL

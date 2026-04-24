@@ -120,3 +120,26 @@ func (h *MeHandler) Get(c *gin.Context) {
 	}
 	resp.OK(c, toView(t))
 }
+
+// DELETE /api/me/images/tasks/:id
+func (h *MeHandler) Delete(c *gin.Context) {
+	uid := middleware.UserID(c)
+	if uid == 0 {
+		resp.Unauthorized(c, "not logged in")
+		return
+	}
+	id := c.Param("id")
+	if id == "" {
+		resp.Fail(c, 40000, "task id required")
+		return
+	}
+	if err := h.dao.DeleteByUserTaskID(c.Request.Context(), uid, id); err != nil {
+		if errors.Is(err, ErrNotFound) {
+			resp.Fail(c, 40400, "task not found")
+			return
+		}
+		resp.Internal(c, err.Error())
+		return
+	}
+	resp.OK(c, gin.H{"deleted": id})
+}

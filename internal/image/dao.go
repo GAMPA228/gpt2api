@@ -128,6 +128,20 @@ SELECT id, task_id, user_id, key_id, model_id, account_id, prompt, n, size, upsc
 	return out, err
 }
 
+// DeleteByUserTaskID 删除当前用户自己的任务。
+func (d *DAO) DeleteByUserTaskID(ctx context.Context, userID uint64, taskID string) error {
+	res, err := d.db.ExecContext(ctx,
+		`DELETE FROM image_tasks WHERE user_id = ? AND task_id = ?`, userID, taskID)
+	if err != nil {
+		return err
+	}
+	n, _ := res.RowsAffected()
+	if n == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
 // DecodeFileIDs 把 JSON 列解出字符串数组。
 func (t *Task) DecodeFileIDs() []string {
 	var out []string

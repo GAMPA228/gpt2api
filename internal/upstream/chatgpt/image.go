@@ -30,6 +30,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"go.uber.org/zap"
 )
 
 // ImageConvOpts 是图像会话的入参。
@@ -543,6 +544,9 @@ func (c *Client) PollConversationForImages(ctx context.Context, convID string, o
 	for time.Now().Before(deadline) {
 		select {
 		case <-ctx.Done():
+			loggerL().Warn("image poll aborted by context",
+				zap.String("conv_id", convID),
+				zap.Error(ctx.Err()))
 			return PollStatusError, nil, nil
 		default:
 		}
@@ -551,6 +555,10 @@ func (c *Client) PollConversationForImages(ctx context.Context, convID string, o
 		if err != nil {
 			if ue, ok := err.(*UpstreamError); ok && ue.Status == 429 {
 				consecutive429++
+				loggerL().Warn("image poll conversation hit 429",
+					zap.String("conv_id", convID),
+					zap.Int("consecutive_429", consecutive429),
+					zap.Duration("remaining", time.Until(deadline)))
 				// image poll 阶段偶发 429 很常见，直接判死会把本可恢复的出图变成 502。
 				// 这里改成退避重试直到总超时，由调用方按 MaxWait 兜底。
 				backoff := 10 * time.Second
@@ -564,9 +572,17 @@ func (c *Client) PollConversationForImages(ctx context.Context, convID string, o
 				continue
 			}
 			if _, ok := err.(*UpstreamError); ok {
+				loggerL().Warn("image poll conversation upstream error",
+					zap.String("conv_id", convID),
+					zap.Error(err),
+					zap.Duration("remaining", time.Until(deadline)))
 				sleep(ctx, opt.Interval)
 				continue
 			}
+			loggerL().Warn("image poll conversation transient error",
+				zap.String("conv_id", convID),
+				zap.Error(err),
+				zap.Duration("remaining", time.Until(deadline)))
 			sleep(ctx, opt.Interval)
 			continue
 		}
